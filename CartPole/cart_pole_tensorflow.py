@@ -1,6 +1,6 @@
 
 import numpy as np
-import torch
+import tensorflow as tf
 import gymnasium as gym
 
 import argparse
@@ -14,60 +14,54 @@ parser.add_argument("--evaluate_each", default=50, type=int, help="After how man
 parser.add_argument("--evaluate_for", default=10, type=int, help="For How many Epochs to evaluate")
 
 
-class Agent(torch.nn.Module):
+class Agent:
     
-    def __init__(self, env: gym.Env, args: argparse.Namespace , *kwargs) -> None:
-        super().__init__(*kwargs)
+    def __init__(self, env: gym.Env, args: argparse.Namespace) -> None:
         
-        self.inputs = torch.nn.Linear(env.observation_space.shape[0], args.hidden_layer)
         self.observation_space = env.observation_space.shape[0]
-        self.activation = torch.nn.ReLU()
-        self.outputs = torch.nn.Linear(args.hidden_layer, env.action_space.n)
         self.action_space = env.action_space.n
-        self.softmax = torch.nn.Softmax()
         
-    def forward_loss(self, states: torch.Tensor, actions: torch.Tensor, returns: torch.Tensor):
-        res = self.inputs(states)
-        res = self.activation(res)
-        res = self.outputs(res)
-        res = self.softmax(res)
+        inputs = tf.keras.layers.Input(self.observation_space)
         
+        hidden = tf.keras.layers.Dense(args.hidden_layer, activation="relu")(inputs)
+        outputs = tf.keras.layers.Dense(self.action_space, activation="softmax")(hidden)
         
-        loss_fn = torch.nn.CrossEntropyLoss(reduction='none')
-        loss = loss_fn(res, actions)
-        loss = loss * returns
-        loss = loss.sum()
+        self.model = tf.keras.Model(inputs=inputs, outputs=outputs)
+        self.model.compile(
+            optimizer=tf.keras.optimizers.Adam(learning_rate=args.lr),
+            loss = tf.keras.losses.SparseCategoricalCrossentropy()
+        )
         
-        
-        return {"actions" : res, "loss" : loss}
+    @tf.function
+    def forward(self, states):
+        return self.model(states)
     
-    def forward(self, states: torch.Tensor):
-        res = self.inputs(states)
-        res = self.activation(res)
-        res = self.outputs(res)
-        res = self.softmax(res)
-        return res
+    @tf.function(experimental_relax_shapes=True)
+    def train(self, states, actions, returns):
+        with tf.GradientTape() as tape:
+            outputs = self.model(states)
+            loss = self.model.compiled_loss(actions, outputs, returns)
+        grad = tape.gradient(loss, self.model.trainable_variables)
+        self.model.optimizer.apply_gradients(zip(grad, self.model.trainable_variables))
     
 class Trainer:
     
-    def __init__(self, model: Agent, env: gym.Env, epochs: int, batch_size:int, optimizer: torch.optim.Optimizer, evaluate_each:int = None, evaluate_for:int = 10) -> None:
-        self.model = model
+    def __init__(self, agent: Agent, env: gym.Env, epochs: int, batch_size:int, evaluate_each:int = None, evaluate_for:int = 10) -> None:
+        self.agent = agent
         self.env = env
         self.epochs = epochs
         self.batch_size = batch_size
-        self.optimizer= optimizer
         self.evaluate_each = evaluate_each
         self.evaluate_for = evaluate_for
         
     def evaluate(self, j):
-        self.model.eval()
         rewards_count = []
         for _ in range(self.evaluate_for):
             state, done = self.env.reset()[0], False
             total_reward = 0
             while not done:
-                agent_prob = self.model.forward(torch.tensor(state))
-                action = np.random.choice([0,1], p=torch.clone(agent_prob).detach().numpy())
+                agent_prob = self.agent.forward(np.asarray(state).reshape(1, -1))
+                action = np.random.choice([0,1], p=agent_prob.numpy()[0,:])
                     
                 next_state, reward, terminated, truncated, _ = self.env.step(action)
                 done = terminated or truncated
@@ -75,20 +69,18 @@ class Trainer:
 
                 state = next_state
             rewards_count.append(total_reward)
-        print(f"Evaluation After {j} epochs: {np.mean(rewards_count)} +- {np.std(rewards_count, ddof=1)}") 
+        print(f"Evaluation After {j} epochs: {np.mean(rewards_count)} +- {np.std(rewards_count, ddof=1)}")
         
     def train(self):
         j = 0
         for _ in range(self.epochs):
-            self.model.train()
-            self.optimizer.zero_grad()
             batch_states, batch_actions, batch_returns = [], [], []
             for _ in range(self.batch_size):
                 states, actions, rewards = [], [], []
                 state, done = self.env.reset()[0], False
                 while not done:
-                    agent_prob = self.model.forward(torch.tensor(state))
-                    action = np.random.choice([0,1], p=torch.clone(agent_prob).detach().numpy())
+                    agent_prob = self.agent.forward(np.asarray(state, dtype=np.float32).reshape(1, -1))
+                    action = np.random.choice([0,1], p=agent_prob.numpy()[0,:])
                     
                     next_state, reward, terminated, truncated, _ = self.env.step(action)
                     done = terminated or truncated
@@ -106,9 +98,10 @@ class Trainer:
             batch_actions += actions
             batch_returns += rewards
             
-            returns = self.model.forward_loss(torch.tensor(batch_states), torch.tensor(batch_actions).type(torch.LongTensor), torch.tensor(batch_returns))
-            returns["loss"].backward()
-            self.optimizer.step()         
+            self.agent.train(np.asarray(batch_states, dtype=np.float32).reshape(-1, self.env.observation_space.shape[0]), 
+                             np.asarray(batch_actions, dtype=np.int32),
+                             np.asarray(batch_returns, dtype=np.float32))
+                
                       
             if self.evaluate_each != None and j % self.evaluate_each == 0:
                 self.evaluate(j)
@@ -118,8 +111,7 @@ class Trainer:
 def main(env, args):
     model = Agent(env, args)
     
-    optimizer= torch.optim.AdamW(model.parameters(),lr=args.lr)
-    trainer = Trainer(model, env, args.epochs, args.batch_size, optimizer, args.evaluate_each, args.evaluate_for)
+    trainer = Trainer(model, env, args.epochs, args.batch_size, args.evaluate_each, args.evaluate_for)
     trainer.train()
     
 if __name__ == "__main__": 

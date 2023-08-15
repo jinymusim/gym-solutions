@@ -10,6 +10,8 @@ parser.add_argument("--hidden_layer", default=100, type=int, help="Hidden layers
 parser.add_argument("--epochs", default=1000, type=int, help="Number of epochs to train for")
 parser.add_argument("--batch_size", default=8, type=int, help="Batch size")
 parser.add_argument("--lr", default=5e-3, type=float, help="Learning Rate")
+parser.add_argument("--evaluate_each", default=50, type=int, help="After how many epochs to evaluate")
+parser.add_argument("--evaluate_for", default=10, type=int, help="For How many Epochs to evaluate")
 
 
 class Agent(torch.nn.Module):
@@ -63,12 +65,34 @@ class Agent(torch.nn.Module):
     
 class Trainer:
     
-    def __init__(self, model: Agent, env: gym.Env, epochs: int, batch_size:int, optimizer: torch.optim.Optimizer) -> None:
+    def __init__(self, model: Agent, env: gym.Env, epochs: int, batch_size:int, optimizer: torch.optim.Optimizer, evaluate_each:int = None, evaluate_for:int = 10) -> None:
         self.model = model
         self.env = env
         self.epochs = epochs
         self.batch_size = batch_size
         self.optimizer= optimizer
+        self.evaluate_each = evaluate_each
+        self.evaluate_for = evaluate_for
+        
+        
+    def evaluate(self, j):
+        self.model.eval()
+        rewards_count = []
+        for _ in range(self.evaluate_for):
+            state, done = self.env.reset()[0], False
+            total_reward = 0
+            while not done:
+                agent_prob = self.model.forward(torch.tensor(state))
+                action = np.random.choice([0,1], p=torch.clone(agent_prob).detach().numpy())
+                    
+                next_state, reward, terminated, truncated, _ = self.env.step(action)
+                done = terminated or truncated
+                total_reward += reward
+
+                state = next_state
+            rewards_count.append(total_reward)
+        print(f"Evaluation After {j} epochs: {np.mean(rewards_count)} +- {np.std(rewards_count, ddof=1)}") 
+    
         
     def train(self):
         j = 0
@@ -103,8 +127,8 @@ class Trainer:
             returns["loss"].backward()
             self.optimizer.step()         
                       
-            if j % 50 == 0:
-                print(f"Epoch {j} --- Current mean batch returns: {np.mean(batch_returns)}")
+            if self.evaluate_each != None and j % self.evaluate_each == 0:
+                self.evaluate(j)
             
             j+= 1
             
@@ -112,7 +136,7 @@ def main(env, args):
     model = Agent(env, args)
     
     optimizer= torch.optim.AdamW(model.parameters(),lr=args.lr)
-    trainer = Trainer(model, env, args.epochs, args.batch_size, optimizer)
+    trainer = Trainer(model, env, args.epochs, args.batch_size, optimizer, args.evaluate_each, args.evaluate_for)
     trainer.train()
     
 if __name__ == "__main__": 
