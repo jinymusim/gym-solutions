@@ -83,7 +83,7 @@ class Trainer:
             total_reward = 0
             while not done:
                 agent_prob = self.model.forward(torch.tensor(state))
-                action = np.random.choice([0,1], p=torch.clone(agent_prob).detach().numpy())
+                action = np.argmax(agent_prob.detach().numpy())
                     
                 next_state, reward, terminated, truncated, _ = self.env.step(action)
                 done = terminated or truncated
@@ -105,7 +105,7 @@ class Trainer:
                 state, done = self.env.reset()[0], False
                 while not done:
                     agent_prob = self.model.forward(torch.tensor(state))
-                    action = np.random.choice([0,1], p=torch.clone(agent_prob).detach().numpy())
+                    action = np.random.choice(list(range(self.env.action_space.n)), p=torch.clone(agent_prob).detach().numpy())
                     
                     next_state, reward, terminated, truncated, _ = self.env.step(action)
                     done = terminated or truncated

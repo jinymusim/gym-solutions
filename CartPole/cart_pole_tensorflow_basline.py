@@ -79,7 +79,7 @@ class Trainer:
             total_reward = 0
             while not done:
                 agent_prob = self.agent.forward(np.asarray(state).reshape(1, -1))
-                action = np.random.choice([0,1], p=agent_prob.numpy()[0,:])
+                action = np.argmax(agent_prob.numpy()[0,:])
                     
                 next_state, reward, terminated, truncated, _ = self.env.step(action)
                 done = terminated or truncated
@@ -98,7 +98,7 @@ class Trainer:
                 state, done = self.env.reset()[0], False
                 while not done:
                     agent_prob = self.agent.forward(np.asarray(state, dtype=np.float32).reshape(1, -1))
-                    action = np.random.choice([0,1], p=agent_prob.numpy()[0,:])
+                    action = np.random.choice(list(range(self.env.action_space.n)), p=agent_prob.numpy()[0,:])
                     
                     next_state, reward, terminated, truncated, _ = self.env.step(action)
                     done = terminated or truncated
