@@ -7,3 +7,4 @@ pygame
 mujoco
 imageio
 tensorflow
+tensorflow_probability
