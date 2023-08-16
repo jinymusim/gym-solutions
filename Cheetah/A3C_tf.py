@@ -9,7 +9,7 @@ import collections
 
 parser = argparse.ArgumentParser()
 
-parser.add_argument("--env", default="Ant-v4", type=str, help="Environment.")
+parser.add_argument("--env", default="HalfCheetah-v4", type=str, help="Environment.")
 parser.add_argument("--batch_size", default=16, type=int, help="Batch size.")
 parser.add_argument("--num_envs", default=4, type=int, help="Environments.")
 parser.add_argument("--evaluate_each", default=100, type=int, help="Evaluate each number of updates.")
@@ -148,11 +148,11 @@ class Trainer:
         while True:
             for _ in range(self.args.evaluate_each if self.args.evaluate_each != None else 50):
                 
-                action, _, _ = self.agent.actor_forward(np.asarray(state, dtype=np.float32).reshape(self.args.num_envs, -1))
+                action, _, _ = self.agent.actor_forward(np.asarray(state, dtype=np.float32).reshape(self.args.num_envs, -1))[0]
                 next_state, reward, terminated, truncated, _ = venv.step(action)
                 done = terminated | truncated
                 
-                for i in range(self.args.num_envs):
+                for i in range(args.envs):
                     replay_buffer.append((state[i], action[i],reward[i], done[i], next_state[i]))
                     
                 state = next_state
@@ -161,7 +161,7 @@ class Trainer:
                     states, actions, rewards, dones, next_states = map(np.array, zip(*[snapshot for snapshot in episode]))
                     returns = rewards[:,None] + self.args.gamma * self.agent.critic_forward(np.asarray(next_states, dtype=np.float32).reshape(self.args.batch_size, -1))[0] * np.logical_not(dones)[:,None]
 
-                    self.agent.train(states.astype(np.float32), actions.astype(np.float32), returns)  
+                    self.agent.train(states.astype(np.float32), actions.astype(np.float32), returns) 
                 
                 j+= 1
                       
