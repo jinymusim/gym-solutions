@@ -5,4 +5,5 @@ numpy
 gymnasium
 pygame
 mujoco
+imageio
 tensorflow

@@ -8,19 +8,18 @@ import random
 import argparse
 
 parser = argparse.ArgumentParser()
-parser.add_argument("--hidden_layer", default=50, type=int, help="Hidden layers sizes")
-parser.add_argument("--epochs", default=1000, type=int, help="Number of epochs to train for")
-parser.add_argument("--batch_size", default=5, type=int, help="Batch size")
-parser.add_argument("--lr", default=5e-3, type=float, help="Learning Rate")
+parser.add_argument("--hidden_layer", default=32, type=int, help="Hidden layers sizes")
+parser.add_argument("--epochs", default=5000, type=int, help="Number of epochs to train for")
+parser.add_argument("--batch_size", default=8, type=int, help="Batch size")
+parser.add_argument("--lr", default=1e-3, type=float, help="Learning Rate")
 parser.add_argument("--evaluate_each", default=50, type=int, help="After how many epochs to evaluate")
 parser.add_argument("--evaluate_for", default=10, type=int, help="For How many Epochs to evaluate")
 parser.add_argument("--epsilon", default=0.9, type=float, help="Exploration factor")
-parser.add_argument("--epsilon_final", default=0.3, type=float, help="Final exploration factor")
-parser.add_argument("--epsilon_final_at", default=2000, type=int, help="Training episodes")
+parser.add_argument("--epsilon_final", default=0.1, type=float, help="Final exploration factor")
+parser.add_argument("--epsilon_final_at", default=1000, type=int, help="Training episodes")
 parser.add_argument("--target_update_freq", default=10, type=int, help="Target update frequency")
 parser.add_argument("--gamma", default=0.99, type=float, help="Discounting factor.")
-
-
+parser.add_argument("--min_buffer", default=100, type=int, help="Training episodes")
 
 class Agent:
     
@@ -75,7 +74,7 @@ class Trainer:
             total_reward = 0
             while not done:
                 agent_prob = self.agent.forward(np.asarray(state).reshape(1, -1))
-                action = np.argmax(agent_prob.numpy()[0,:])
+                action = np.argmax(agent_prob.numpy()[0])
                     
                 next_state, reward, terminated, truncated, _ = self.env.step(action)
                 done = terminated or truncated
@@ -98,20 +97,20 @@ class Trainer:
                 if random.random() < epsilon:
                     action = random.choice(list(range(self.env.action_space.n)))
                 else:
-                    action = np.argmax(self.agent.forward(np.asarray(state, dtype=np.float32).reshape(1, -1))[0,:])
+                    action = np.argmax(self.agent.forward(np.asarray(state, dtype=np.float32).reshape(1, -1)).numpy()[0])
                     
                 next_state, reward, terminated, truncated, _ = self.env.step(action)
                 done = terminated or truncated
                 
                 replay_buffer.append((state, action, reward, done, next_state))
                 
-                if len(replay_buffer) >= self.args.batch_size:
+                if len(replay_buffer) >= self.args.min_buffer:
                     if len(replay_buffer) % self.args.target_update_freq == 0:
                         self.target_agent.copy_weights_from(self.agent)
 
                     episode = random.choices(replay_buffer, k=self.args.batch_size)
                     returns = [reward + self.args.gamma*np.max(
-                        self.target_agent.forward(np.asarray(next_state, dtype=np.float32).reshape(1, -1))[0,:]
+                        self.target_agent.forward(np.asarray(next_state, dtype=np.float32).reshape(1, -1)).numpy()[0]
                     )*(1-done) for _, _, reward, done, next_state in episode]
                     returns = np.asarray(returns, dtype=np.float32)
                     mask = np.zeros(shape=(len(returns), self.env.action_space.n), dtype=np.float32)
@@ -140,7 +139,7 @@ def main(env, args):
     
 if __name__ == "__main__": 
     args = parser.parse_args([] if "__file__" not in globals() else None)
-    env = gym.make("MountainCar-v0")
+    env = gym.make("CartPole-v1")
     
     main(env, args)
         
