@@ -16,7 +16,7 @@ parser.add_argument("--evaluate_for", default=10, type=int, help="Evaluate the g
 parser.add_argument("--gamma", default=0.99, type=float, help="Discounting factor.")
 parser.add_argument("--hidden_size", default=16, type=int, help="Size of hidden layer.")
 parser.add_argument("--replay_buffer_size", default=100_000, type=int, help="Replay buffer size")
-parser.add_argument("--target_forgetting", default=0.005, type=float, help="Target network update weight.")
+parser.add_argument("--target_forgetting", default=0.001, type=float, help="Target network update weight.")
 parser.add_argument("--min_buffer", default=64, type=int, help="Training episodes")
 
 
@@ -56,6 +56,9 @@ class DDPG:
         self.actor = DDPG.Actor(args, env)
         self.actor.compile(optimizer= "adam")
         
+        self.target_actor = DDPG.Actor(args,env)
+        self.target_actor.compile()
+        
         self.critic = DDPG.Critic(args, env)
         self.critic.compile(
             optimizer="adam",
@@ -80,6 +83,9 @@ class DDPG:
         actor_grad = actor_tape.gradient(actor_loss, self.actor.trainable_variables)
         self.actor.optimizer.apply_gradients(zip(actor_grad,self.actor.trainable_variables))
         
+        for var, target_var in zip(self.actor.trainable_variables, self.target_actor.trainable_variables):
+            target_var.assign(target_var * (1 - self.target_forgetting) + var * self.target_forgetting)
+        
         with tf.GradientTape() as critic_tape:          
             # Predicted values
             predict_critic = self.critic(tf.concat([states, actions], 1))
@@ -97,7 +103,7 @@ class DDPG:
     
     @tf.function()
     def critic_forward(self, states):
-        actor_actions = self.actor(states)
+        actor_actions = self.target_actor(states)
         return self.critic(tf.concat([states, actor_actions], 1))
          
     
@@ -134,7 +140,7 @@ class Trainer:
             
             state, done = env.reset()[0], False
             while not done:
-                action = np.clip(self.agent.actor_forward(np.asarray(state, dtype=np.float32).reshape(1, -1))[0] * np.random.normal(scale =0.1), self.env.action_space.low, self.env.action_space.high)
+                action = np.clip(self.agent.actor_forward(np.asarray(state, dtype=np.float32).reshape(1, -1))[0] + np.random.normal(scale =0.1), self.env.action_space.low, self.env.action_space.high)
                 next_state, reward, terminated, truncated, _ = self.env.step(action)
                 done = terminated or truncated
 

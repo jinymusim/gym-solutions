@@ -9,17 +9,16 @@ import collections
 
 parser = argparse.ArgumentParser()
 
-parser.add_argument("--env", default="HalfCheetah-v4", type=str, help="Environment.")
-parser.add_argument("--batch_size", default=16, type=int, help="Batch size.")
+parser.add_argument("--env", default="Pendulum-v1", type=str, help="Environment.")
+parser.add_argument("--batch_size", default=64, type=int, help="Batch size.")
 parser.add_argument("--evaluate_each", default=50, type=int, help="Evaluate each number of updates.")
 parser.add_argument("--evaluate_for", default=10, type=int, help="Evaluate the given number of episodes.")
 parser.add_argument("--gamma", default=0.99, type=float, help="Discounting factor.")
-parser.add_argument("--hidden_size", default=16, type=int, help="Size of hidden layer.")
+parser.add_argument("--hidden_size", default=64, type=int, help="Size of hidden layer.")
 parser.add_argument("--replay_buffer_size", default=100_000, type=int, help="Replay buffer size")
-parser.add_argument("--target_forgetting", default=0.001, type=float, help="Target network update weight.")
-parser.add_argument("--min_buffer", default=64, type=int, help="Training episodes")
-parser.add_argument("--ornstein_theta", default=0.15, type=float, help="Target network update weight.")
-parser.add_argument("--ornstein_sigma", default=0.04, type=float, help="Target network update weight.")
+parser.add_argument("--target_forgetting", default=0.005, type=float, help="Target network update weight.")
+parser.add_argument("--min_buffer", default=256, type=int, help="Training episodes")
+
 
 
 
@@ -57,7 +56,7 @@ class DDPG:
         self.actor = DDPG.Actor(args, env)
         self.actor.compile(optimizer= "adam")
         
-        self.target_actor = DDPG.Actor(args,env)
+        self.target_actor = DDPG.Actor(args, env)
         self.target_actor.compile()
         
         self.critic = DDPG.Critic(args, env)
@@ -69,11 +68,16 @@ class DDPG:
         self.target_critic = DDPG.Critic(args, env)
         self.target_critic.compile()
         
-        self.target_forgetting = args.target_forgetting
+        self.other_critic = DDPG.Critic(args, env)
+        self.other_critic.compile(
+            optimizer="adam",
+            loss = tf.keras.losses.MeanSquaredError()
+        )
         
-        self.ornstein_process = np.zeros(env.action_space.shape[0])
-        self.ornstein_theta = args.ornstein_theta
-        self.ornstein_sigma = args.ornstein_sigma
+        self.other_target_critic = DDPG.Critic(args, env)
+        self.other_target_critic.compile()
+        
+        self.target_forgetting = args.target_forgetting
 
 
         
@@ -88,18 +92,28 @@ class DDPG:
         actor_grad = actor_tape.gradient(actor_loss, self.actor.trainable_variables)
         self.actor.optimizer.apply_gradients(zip(actor_grad,self.actor.trainable_variables))
         
+        
         for var, target_var in zip(self.actor.trainable_variables, self.target_actor.trainable_variables):
             target_var.assign(target_var * (1 - self.target_forgetting) + var * self.target_forgetting)
         
         with tf.GradientTape() as critic_tape:          
-            # Predicted values
             predict_critic = self.critic(tf.concat([states, actions], 1))
-            # Loss already returns mean 
             critic_loss = self.critic.loss(returns, predict_critic)
+            
         critic_grad = critic_tape.gradient(critic_loss, self.critic.trainable_variables)       
         self.critic.optimizer.apply_gradients(zip(critic_grad, self.critic.trainable_variables))
         
+        with tf.GradientTape() as other_critic_tape:
+            predict_other_critic = self.other_critic(tf.concat([states, actions], 1))
+            other_critic_loss = self.other_critic.loss(returns, predict_other_critic)
+            
+        other_critic_grad = other_critic_tape.gradient(other_critic_loss, self.other_critic.trainable_variables)       
+        self.other_critic.optimizer.apply_gradients(zip(other_critic_grad, self.other_critic.trainable_variables))
+        
         for var, target_var in zip(self.critic.trainable_variables, self.target_critic.trainable_variables):
+            target_var.assign(target_var * (1 - self.target_forgetting) + var * self.target_forgetting)
+            
+        for var, target_var in zip(self.other_critic.trainable_variables, self.other_target_critic.trainable_variables):
             target_var.assign(target_var * (1 - self.target_forgetting) + var * self.target_forgetting)
             
     @tf.function()
@@ -108,12 +122,8 @@ class DDPG:
     
     @tf.function()
     def critic_forward(self, states):
-        actor_actions = self.target_actor(states)
-        return self.critic(tf.concat([states, actor_actions], 1))
-    
-    def ornstein_noise(self):
-        self.ornstein_process += self.ornstein_theta * (np.zeros_like(self.ornstein_process) - self.ornstein_process) + np.random.normal(scale=self.ornstein_sigma, size=self.ornstein_process.shape)
-        return self.ornstein_process
+        actor_actions = tf.clip_by_value(self.target_actor(states) + np.random.normal(scale =0.1), self.actor.env.action_space.low, self.actor.env.action_space.high)
+        return tf.minimum(self.target_critic(tf.concat([states, actor_actions], 1)), self.other_target_critic(tf.concat([states, actor_actions], 1)))
          
     
 class Trainer:
@@ -149,7 +159,11 @@ class Trainer:
             
             state, done = env.reset()[0], False
             while not done:
-                action = np.clip(self.agent.actor_forward(np.asarray(state, dtype=np.float32).reshape(1, -1))[0] + self.agent.ornstein_noise(), self.env.action_space.low, self.env.action_space.high)
+                action = np.clip(self.agent.actor_forward
+                                 (np.asarray(state, dtype=np.float32).reshape(1, -1))[0] + np.random.normal(scale =0.1), 
+                                 self.env.action_space.low, 
+                                 self.env.action_space.high)
+                
                 next_state, reward, terminated, truncated, _ = self.env.step(action)
                 done = terminated or truncated
 
