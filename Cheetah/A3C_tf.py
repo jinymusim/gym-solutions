@@ -10,7 +10,7 @@ import collections
 parser = argparse.ArgumentParser()
 
 parser.add_argument("--env", default="HalfCheetah-v4", type=str, help="Environment.")
-parser.add_argument("--batch_size", default=16, type=int, help="Batch size.")
+parser.add_argument("--batch_size", default=32, type=int, help="Batch size.")
 parser.add_argument("--num_envs", default=4, type=int, help="Environments.")
 parser.add_argument("--evaluate_each", default=100, type=int, help="Evaluate each number of updates.")
 parser.add_argument("--evaluate_for", default=10, type=int, help="Evaluate the given number of episodes.")
@@ -19,7 +19,7 @@ parser.add_argument("--hidden_size", default=64, type=int, help="Size of hidden 
 parser.add_argument("--replay_buffer_size", default=100_000, type=int, help="Replay buffer size")
 parser.add_argument("--target_entropy", default=-1, type=float, help="Target entropy per action component.")
 parser.add_argument("--target_forgetting", default=0.005, type=float, help="Target network update weight.")
-parser.add_argument("--min_buffer", default=64, type=int, help="Training episodes")
+parser.add_argument("--min_buffer", default=128, type=int, help="Training episodes")
 
 
 
@@ -75,7 +75,7 @@ class A3C:
         )
         
         self.target_critic = A3C.Critic(args, env)
-        self.critic.compile()
+        self.target_critic.compile()
         
         self.target_entropy = env.action_space.shape[0] * args.target_entropy
         self.target_forgetting = args.target_forgetting
@@ -112,7 +112,7 @@ class A3C:
     @tf.function()
     def critic_forward(self, states):
         actor_actions, log_prob, alpha = self.actor(states)
-        return self.critic(tf.concat([states, actor_actions], 1)) - alpha * log_prob
+        return self.target_critic(tf.concat([states, actor_actions], 1)) - alpha * log_prob
          
     
 class Trainer:
@@ -128,9 +128,9 @@ class Trainer:
             state, done = self.env.reset()[0], False
             total_reward = 0
             while not done:
-                action, _, _ = self.agent.actor_forward(np.asarray(state, dtype=np.float32).reshape(1, -1))[0]
+                action, _, _ = self.agent.actor_forward(np.asarray(state, dtype=np.float32).reshape(1, -1))
                     
-                next_state, reward, terminated, truncated, _ = self.env.step(action)
+                next_state, reward, terminated, truncated, _ = self.env.step(action[0])
                 done = terminated or truncated
                 total_reward += reward
 
@@ -148,18 +148,18 @@ class Trainer:
         while True:
             for _ in range(self.args.evaluate_each if self.args.evaluate_each != None else 50):
                 
-                action, _, _ = self.agent.actor_forward(np.asarray(state, dtype=np.float32).reshape(self.args.num_envs, -1))[0]
+                action, _, _ = self.agent.actor_forward(np.asarray(state, dtype=np.float32).reshape(self.args.num_envs, -1))
                 next_state, reward, terminated, truncated, _ = venv.step(action)
                 done = terminated | truncated
                 
-                for i in range(args.envs):
+                for i in range(self.args.num_envs):
                     replay_buffer.append((state[i], action[i],reward[i], done[i], next_state[i]))
                     
                 state = next_state
                 if len(replay_buffer) >= self.args.min_buffer:
                     episode = random.choices(replay_buffer, k=self.args.batch_size)
                     states, actions, rewards, dones, next_states = map(np.array, zip(*[snapshot for snapshot in episode]))
-                    returns = rewards[:,None] + self.args.gamma * self.agent.critic_forward(np.asarray(next_states, dtype=np.float32).reshape(self.args.batch_size, -1))[0] * np.logical_not(dones)[:,None]
+                    returns = rewards[:,None] + self.args.gamma * self.agent.critic_forward(np.asarray(next_states, dtype=np.float32).reshape(self.args.batch_size, -1)) * np.logical_not(dones)[:,None]
 
                     self.agent.train(states.astype(np.float32), actions.astype(np.float32), returns) 
                 

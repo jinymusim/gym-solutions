@@ -9,17 +9,17 @@ import collections
 
 parser = argparse.ArgumentParser()
 
-parser.add_argument("--env", default="Ant-v4", type=str, help="Environment.")
-parser.add_argument("--batch_size", default=32, type=int, help="Batch size.")
+parser.add_argument("--env", default="Pendulum-v1", type=str, help="Environment.")
+parser.add_argument("--batch_size", default=8, type=int, help="Batch size.")
 parser.add_argument("--num_envs", default=4, type=int, help="Environments.")
 parser.add_argument("--evaluate_each", default=100, type=int, help="Evaluate each number of updates.")
 parser.add_argument("--evaluate_for", default=10, type=int, help="Evaluate the given number of episodes.")
 parser.add_argument("--gamma", default=0.99, type=float, help="Discounting factor.")
-parser.add_argument("--hidden_size", default=64, type=int, help="Size of hidden layer.")
+parser.add_argument("--hidden_size", default=16, type=int, help="Size of hidden layer.")
 parser.add_argument("--replay_buffer_size", default=100_000, type=int, help="Replay buffer size")
-parser.add_argument("--target_entropy", default=-0.5, type=float, help="Target entropy per action component.")
+parser.add_argument("--target_entropy", default=-1, type=float, help="Target entropy per action component.")
 parser.add_argument("--target_forgetting", default=0.005, type=float, help="Target network update weight.")
-parser.add_argument("--min_buffer", default=128, type=int, help="Training episodes")
+parser.add_argument("--min_buffer", default=32, type=int, help="Training episodes")
 
 
 
@@ -31,7 +31,6 @@ class A3C:
         def __init__(self, args: argparse.Namespace, env: gym.Env,*kwargs):
             super().__init__(*kwargs)
             self.hidden = tf.keras.layers.Dense(args.hidden_size, activation="relu")
-            self.other_hidden = tf.keras.layers.Dense(args.hidden_size, activation="relu")
             self.mean = tf.keras.layers.Dense(env.action_space.shape[0], activation=None)
             self.std = tf.keras.layers.Dense(env.action_space.shape[0], activation=None)
             self.alpha = tf.Variable(np.log(0.2), dtype=tf.float32)
@@ -39,9 +38,8 @@ class A3C:
             
         def call(self, inputs: tf.Tensor):
             hidden = self.hidden(inputs)
-            other_hidden = self.other_hidden(hidden)
-            means = self.mean(other_hidden)
-            stds = self.std(other_hidden)
+            means = self.mean(hidden)
+            stds = self.std(hidden)
             action_prob = tfp.bijectors.Tanh()(tfp.distributions.Normal(means, stds))
             
             action_prob_scaled = tfp.bijectors.Scale((self.env.action_space.high - self.env.action_space.low) / 2)(action_prob)
@@ -59,13 +57,11 @@ class A3C:
         def __init__(self, args: argparse.Namespace, env: gym.Env,*kwargs):
             super().__init__(*kwargs)
             self.hidden = tf.keras.layers.Dense(args.hidden_size, activation="relu")
-            self.other_hidden = tf.keras.layers.Dense(args.hidden_size, activation="relu")
             self.output_val = tf.keras.layers.Dense(1, activation=None)
             
         def call(self, inputs:tf.Tensor):
             hidden = self.hidden(inputs)
-            other_hidden = self.other_hidden(hidden)
-            outputs = self.output_val(other_hidden)
+            outputs = self.output_val(hidden)
             return outputs
         
     def __init__(self, args: argparse.Namespace, env: gym.Env) -> None:
@@ -102,7 +98,7 @@ class A3C:
             # Predicted values
             predict_critic = self.critic(tf.concat([states, actions], 1))
             # Loss already returns mean 
-            critic_loss = self.critic.compiled_loss(returns, predict_critic)
+            critic_loss = self.critic.loss(returns, predict_critic)
         critic_grad = critic_tape.gradient(critic_loss, self.critic.trainable_variables)
         self.critic.optimizer.apply_gradients(zip(critic_grad, self.critic.trainable_variables))
         
@@ -145,26 +141,17 @@ class Trainer:
     def train(self):
         j = 0
         
-        # Done for Testing purposes (More venvs => Multithreading with bad debug)
-        #venv = None
-        #if self.args.num_envs == 1:
-        #    venv = self.env
-        #else:
         venv = gym.vector.make(self.args.env, self.args.num_envs, asynchronous=True)
         replay_buffer = collections.deque(maxlen=self.args.replay_buffer_size)
-        
         state = venv.reset()[0]
         
         while True:
             for _ in range(self.args.evaluate_each if self.args.evaluate_each != None else 50):
                 
                 action, _, _ = self.agent.actor_forward(np.asarray(state, dtype=np.float32).reshape(self.args.num_envs, -1))
-                #action  = np.squeeze(action)
                 next_state, reward, terminated, truncated, _ = venv.step(action)
                 done = terminated | truncated
-                #if self.args.num_envs == 1:
-                #replay_buffer.append((state, action,reward, done, next_state))
-                #else:
+                
                 for i in range(self.args.num_envs):
                     replay_buffer.append((state[i], action[i],reward[i], done[i], next_state[i]))
                     
@@ -174,7 +161,7 @@ class Trainer:
                     states, actions, rewards, dones, next_states = map(np.array, zip(*[snapshot for snapshot in episode]))
                     returns = rewards[:,None] + self.args.gamma * self.agent.critic_forward(np.asarray(next_states, dtype=np.float32).reshape(self.args.batch_size, -1)) * np.logical_not(dones)[:,None]
 
-                    self.agent.train(states.astype(np.float32), actions.astype(np.float32), returns)  
+                    self.agent.train(states.astype(np.float32), actions.astype(np.float32), returns) 
                 
                 j+= 1
                       

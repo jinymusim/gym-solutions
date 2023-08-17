@@ -145,7 +145,7 @@ class Trainer:
                 if len(replay_buffer) >= self.args.min_buffer:
                     episode = random.choices(replay_buffer, k=self.args.batch_size)
                     states, actions, rewards, dones, next_states = map(np.array, zip(*[snapshot for snapshot in episode]))
-                    returns = rewards[:,None] + self.args.gamma * self.agent.critic_forward(np.asarray(next_states, dtype=np.float32).reshape(self.args.batch_size, -1))[0] * np.logical_not(dones)[:,None]
+                    returns = rewards[:,None] + self.args.gamma * self.agent.critic_forward(np.asarray(next_states, dtype=np.float32).reshape(self.args.batch_size, -1)) * np.logical_not(dones)[:,None]
                     self.agent.train(states.astype(np.float32), actions.astype(np.float32), returns)  
 
             
