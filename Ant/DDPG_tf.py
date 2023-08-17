@@ -18,7 +18,8 @@ parser.add_argument("--hidden_size", default=16, type=int, help="Size of hidden 
 parser.add_argument("--replay_buffer_size", default=100_000, type=int, help="Replay buffer size")
 parser.add_argument("--target_forgetting", default=0.001, type=float, help="Target network update weight.")
 parser.add_argument("--min_buffer", default=64, type=int, help="Training episodes")
-
+parser.add_argument("--ornstein_theta", default=0.15, type=float, help="Target network update weight.")
+parser.add_argument("--ornstein_sigma", default=0.04, type=float, help="Target network update weight.")
 
 
 
@@ -69,6 +70,10 @@ class DDPG:
         self.target_critic.compile()
         
         self.target_forgetting = args.target_forgetting
+        
+        self.ornstein_process = np.zeros(env.action_space.shape[0])
+        self.ornstein_theta = args.ornstein_theta
+        self.ornstein_sigma = args.ornstein_sigma
 
 
         
@@ -105,6 +110,10 @@ class DDPG:
     def critic_forward(self, states):
         actor_actions = self.target_actor(states)
         return self.critic(tf.concat([states, actor_actions], 1))
+    
+    def ornstein_noise(self):
+        self.ornstein_process += self.ornstein_theta * (np.zeros_like(self.ornstein_process) - self.ornstein_process) + np.random.normal(scale=self.ornstein_sigma, size=self.ornstein_process.shape)
+        return self.ornstein_process
          
     
 class Trainer:
@@ -120,7 +129,7 @@ class Trainer:
             state, done = self.env.reset()[0], False
             total_reward = 0
             while not done:
-                action = self.agent.actor_forward(np.asarray(state,dtype=np.float32).reshape(1, -1))[0]
+                action = self.agent.actor_forward(np.asarray(state, dtype=np.float32).reshape(1, -1))[0]
                     
                 next_state, reward, terminated, truncated, _ = self.env.step(action)
                 done = terminated or truncated
@@ -140,7 +149,7 @@ class Trainer:
             
             state, done = env.reset()[0], False
             while not done:
-                action = np.clip(self.agent.actor_forward(np.asarray(state, dtype=np.float32).reshape(1, -1))[0] + np.random.normal(scale =0.1), self.env.action_space.low, self.env.action_space.high)
+                action = np.clip(self.agent.actor_forward(np.asarray(state, dtype=np.float32).reshape(1, -1))[0] + self.agent.ornstein_noise(), self.env.action_space.low, self.env.action_space.high)
                 next_state, reward, terminated, truncated, _ = self.env.step(action)
                 done = terminated or truncated
 
