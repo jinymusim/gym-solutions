@@ -109,7 +109,7 @@ class DDPG:
     @tf.function()
     def critic_forward(self, states):
         actor_actions = self.target_actor(states)
-        return self.critic(tf.concat([states, actor_actions], 1))
+        return self.target_critic(tf.concat([states, actor_actions], 1))
     
     def ornstein_noise(self):
         self.ornstein_process += self.ornstein_theta * (np.zeros_like(self.ornstein_process) - self.ornstein_process) + np.random.normal(scale=self.ornstein_sigma, size=self.ornstein_process.shape)

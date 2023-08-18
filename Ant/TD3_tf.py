@@ -22,7 +22,7 @@ parser.add_argument("--min_buffer", default=256, type=int, help="Training episod
 
 
 
-class DDPG:
+class TD3:
     
     class Actor(tf.keras.Model):
         
@@ -53,28 +53,28 @@ class DDPG:
             return outputs
         
     def __init__(self, args: argparse.Namespace, env: gym.Env) -> None:
-        self.actor = DDPG.Actor(args, env)
+        self.actor = TD3.Actor(args, env)
         self.actor.compile(optimizer= "adam")
         
-        self.target_actor = DDPG.Actor(args, env)
+        self.target_actor = TD3.Actor(args, env)
         self.target_actor.compile()
         
-        self.critic = DDPG.Critic(args, env)
+        self.critic = TD3.Critic(args, env)
         self.critic.compile(
             optimizer="adam",
             loss=tf.keras.losses.MeanSquaredError()
         )
         
-        self.target_critic = DDPG.Critic(args, env)
+        self.target_critic = TD3.Critic(args, env)
         self.target_critic.compile()
         
-        self.other_critic = DDPG.Critic(args, env)
+        self.other_critic = TD3.Critic(args, env)
         self.other_critic.compile(
             optimizer="adam",
             loss = tf.keras.losses.MeanSquaredError()
         )
         
-        self.other_target_critic = DDPG.Critic(args, env)
+        self.other_target_critic = TD3.Critic(args, env)
         self.other_target_critic.compile()
         
         self.target_forgetting = args.target_forgetting
@@ -128,7 +128,7 @@ class DDPG:
     
 class Trainer:
     
-    def __init__(self, agent: DDPG,env: gym.Env, args: argparse.Namespace) -> None:
+    def __init__(self, agent: TD3,env: gym.Env, args: argparse.Namespace) -> None:
         self.agent = agent
         self.env = env
         self.args = args
@@ -185,7 +185,7 @@ class Trainer:
             j+= 1
             
 def main(env, args):
-    model = DDPG(args, env)
+    model = TD3(args, env)
     
     trainer = Trainer(model, env, args)
     trainer.train()
