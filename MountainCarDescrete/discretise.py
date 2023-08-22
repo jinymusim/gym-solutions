@@ -13,7 +13,7 @@ class DiscreteEnv:
     def step(self, action):
         state_raw, reward, terminated, truncated, temp = self.env.step(action)
         counter = 0
-        state = np.zeros(self.observation_space)
+        state = np.zeros(self.observation_space, dtype=np.int32)
         for i in range(len(state_raw)):
             ids = np.argmin(np.abs(self.base_mesh - state_raw[i]))
             counter += ids * (self.tiles ** i)
@@ -23,7 +23,7 @@ class DiscreteEnv:
     def reset(self):
         state_raw = self.env.reset()[0]
         counter = 0
-        state = np.zeros(self.observation_space)
+        state = np.zeros(self.observation_space, dtype=np.int32)
         for i in range(len(state_raw)):
             ids = np.argmin(np.abs(self.base_mesh - state_raw[i]))
             counter += ids * (self.tiles ** i)
@@ -43,7 +43,7 @@ class DiscreteVenv:
     
     def reset(self):
         states_raw = self.venv.reset()[0]
-        states = np.zeros((states_raw.shape[0], self.observation_space))
+        states = np.zeros((states_raw.shape[0], self.observation_space), dtype=np.int32)
         for j in range(states.shape[0]):
             counter = 0
             for i in range(len(states_raw[j])):
@@ -54,7 +54,7 @@ class DiscreteVenv:
     
     def step(self, action):
         states_raw, reward, terminated, truncated, temp = self.venv.step(action)
-        states = np.zeros((states_raw.shape[0], self.observation_space))
+        states = np.zeros((states_raw.shape[0], self.observation_space), dtype=np.int32)
         for j in range(states.shape[0]):
             counter = 0
             for i in range(len(states_raw[j])):
