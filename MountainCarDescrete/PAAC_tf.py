@@ -6,16 +6,18 @@ import argparse
 import gymnasium as gym
 import numpy as np
 import collections
+from discretise import DiscreteEnv, DiscreteVenv
 
 parser = argparse.ArgumentParser()
 
-parser.add_argument("--env", default="CartPole-v1", type=str, help="Environment.")
+parser.add_argument("--env", default="MountainCar-v0", type=str, help="Environment.")
 parser.add_argument("--num_envs", default=8, type=int, help="Environments.")
 parser.add_argument("--evaluate_each", default=100, type=int, help="Evaluate each number of updates.")
 parser.add_argument("--evaluate_for", default=10, type=int, help="Evaluate the given number of episodes.")
 parser.add_argument("--gamma", default=1, type=float, help="Discounting factor.")
-parser.add_argument("--hidden_size", default=32, type=int, help="Size of hidden layer.")
+parser.add_argument("--hidden_size", default=256, type=int, help="Size of hidden layer.")
 parser.add_argument("--entropy_regularization", default=0.01, type=float, help="Entropy regularization weight.")
+parser.add_argument("--tiles", default=16, type=int, help="Number of tiling per dimension")
 
 
 
@@ -24,7 +26,7 @@ class PAAC:
     
     class Actor(tf.keras.Model):
         
-        def __init__(self, args: argparse.Namespace, env: gym.Env,*kwargs):
+        def __init__(self, args: argparse.Namespace, env: DiscreteEnv,*kwargs):
             super().__init__(*kwargs)
             self.hidden = tf.keras.layers.Dense(args.hidden_size, activation="relu")
             self.actions  = tf.keras.layers.Dense(env.action_space.n, activation=tf.nn.softmax)
@@ -37,7 +39,7 @@ class PAAC:
         
     class Critic(tf.keras.Model):
         
-        def __init__(self, args: argparse.Namespace, env: gym.Env,*kwargs):
+        def __init__(self, args: argparse.Namespace, env: DiscreteEnv,*kwargs):
             super().__init__(*kwargs)
             self.hidden = tf.keras.layers.Dense(args.hidden_size, activation="relu")
             self.output_val = tf.keras.layers.Dense(1, activation=None)
@@ -47,7 +49,7 @@ class PAAC:
             outputs = self.output_val(hidden)
             return outputs
         
-    def __init__(self, args: argparse.Namespace, env: gym.Env) -> None:
+    def __init__(self, args: argparse.Namespace, env: DiscreteEnv) -> None:
         self.actor = PAAC.Actor(args, env)
         self.actor.compile(
             optimizer= "adam",
@@ -77,7 +79,7 @@ class PAAC:
         with tf.GradientTape() as actor_tape:
             actor_actions =  self.actor(states)
             
-            actor_loss =self.actor.loss(actions, actor_actions, returns - predict_critic)
+            actor_loss = self.actor.loss(actions, actor_actions, returns - predict_critic)
             
         actor_grad = actor_tape.gradient(actor_loss, self.actor.trainable_variables)
         self.actor.optimizer.apply_gradients(zip(actor_grad,self.actor.trainable_variables))     
@@ -119,6 +121,7 @@ class Trainer:
         j = 0
         
         venv = gym.vector.make(self.args.env, self.args.num_envs, asynchronous=True)
+        venv = DiscreteVenv(venv, self.args.tiles)
         states = venv.reset()[0]
         
         while True:
@@ -155,5 +158,6 @@ def main(env, args):
 if __name__ == "__main__": 
     args = parser.parse_args([] if "__file__" not in globals() else None)
     env = gym.make(args.env)
+    env = DiscreteEnv(env, args.tiles)
     
     main(env, args)

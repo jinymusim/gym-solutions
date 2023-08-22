@@ -4,7 +4,7 @@ import tensorflow as tf
 import gymnasium as gym
 import collections
 import random
-from descretise import DescreteEnv
+from discretise import DiscreteEnv
 
 import argparse
 
@@ -26,7 +26,7 @@ parser.add_argument("--tiles", default=8, type=int, help="Number of tiling per d
 
 class Agent:
     
-    def __init__(self, env: DescreteEnv, args: argparse.Namespace) -> None:
+    def __init__(self, env: DiscreteEnv, args: argparse.Namespace) -> None:
         
         self.observation_space = env.observation_space
         self.action_space = env.action_space.n
@@ -64,7 +64,7 @@ class Agent:
 
 class Trainer:
     
-    def __init__(self, agent: Agent, target_agent : Agent,env: DescreteEnv, args: argparse.Namespace) -> None:
+    def __init__(self, agent: Agent, target_agent : Agent,env: DiscreteEnv, args: argparse.Namespace) -> None:
         self.agent = agent
         self.target_agent = target_agent
         self.env = env
@@ -143,7 +143,7 @@ def main(env, args):
 if __name__ == "__main__": 
     args = parser.parse_args([] if "__file__" not in globals() else None)
     env = gym.make(args.env)
-    env = DescreteEnv(env, args.tiles)
+    env = DiscreteEnv(env, args.tiles)
     
     main(env, args)
         

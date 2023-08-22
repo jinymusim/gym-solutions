@@ -2,7 +2,7 @@
 import numpy as np
 import tensorflow as tf
 import gymnasium as gym
-from descretise import DescreteEnv
+from discretise import DiscreteEnv
 import argparse
 
 parser = argparse.ArgumentParser()
@@ -19,7 +19,7 @@ parser.add_argument("--tiles", default=8, type=int, help="Number of tiling per d
 class Agent:
     
     class Actor(tf.keras.Model):
-        def __init__(self, args: argparse.Namespace, env : DescreteEnv, *kwargs):
+        def __init__(self, args: argparse.Namespace, env : DiscreteEnv, *kwargs):
             super().__init__(*kwargs)
             self.hidden = tf.keras.layers.Dense(args.hidden_layer, activation="relu")
             self.outputs = tf.keras.layers.Dense(env.action_space.n, activation="softmax")
@@ -31,7 +31,7 @@ class Agent:
             return outputs
         
     class Baseline(tf.keras.Model):
-        def __init__(self, args: argparse.Namespace, env: DescreteEnv, *kwargs):
+        def __init__(self, args: argparse.Namespace, env: DiscreteEnv, *kwargs):
             super().__init__(*kwargs)
             self.hidden = tf.keras.layers.Dense(args.hidden_layer, activation="relu")
             self.baseline = tf.keras.layers.Dense(1, activation=None)
@@ -41,7 +41,7 @@ class Agent:
             baseline = self.baseline(hidden)
             return baseline
     
-    def __init__(self, env: DescreteEnv, args: argparse.Namespace) -> None:
+    def __init__(self, env: DiscreteEnv, args: argparse.Namespace) -> None:
         
         self.actor = Agent.Actor(args, env)
         self.actor.compile(
@@ -78,7 +78,7 @@ class Agent:
     
 class Trainer:
     
-    def __init__(self, agent: Agent, env: DescreteEnv, args: argparse.Namespace) -> None:
+    def __init__(self, agent: Agent, env: DiscreteEnv, args: argparse.Namespace) -> None:
         self.agent = agent
         self.env = env
         self.args = args
@@ -146,7 +146,7 @@ def main(env, args):
 if __name__ == "__main__": 
     args = parser.parse_args([] if "__file__" not in globals() else None)
     env = gym.make(args.env)
-    env = DescreteEnv(env,args.tiles)
+    env = DiscreteEnv(env,args.tiles)
     
     main(env, args)
         
