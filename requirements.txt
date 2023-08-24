@@ -3,6 +3,7 @@ torchvision
 torchaudio
 numpy
 gymnasium
+gymnasium[other]
 pygame
 mujoco
 imageio

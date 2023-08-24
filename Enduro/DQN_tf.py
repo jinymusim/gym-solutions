@@ -9,7 +9,7 @@ import collections
 
 parser = argparse.ArgumentParser()
 
-parser.add_argument("--env", default="ALE/Assault-v5", type=str, help="Environment.")
+parser.add_argument("--env", default="ALE/Enduro-v5", type=str, help="Environment.")
 parser.add_argument("--batch_size", default=16, type=int, help="Batch size.")
 parser.add_argument("--evaluate_each", default=50, type=int, help="Evaluate each number of updates.")
 parser.add_argument("--evaluate_for", default=10, type=int, help="Evaluate the given number of episodes.")
@@ -141,7 +141,7 @@ def main(env, args):
     
 if __name__ == "__main__": 
     args = parser.parse_args([] if "__file__" not in globals() else None)
-    env = gym.make(args.env) 
+    env = gym.make(args.env)  
     env = gym.wrappers.NormalizeObservation(env)
     env = gym.wrappers.ResizeObservation(env, args.num_pixels)
     # The way framestack is done is stupid
