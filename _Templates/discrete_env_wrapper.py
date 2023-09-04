@@ -8,7 +8,7 @@ class DiscreteEnv(gym.Wrapper):
         self.env = env
         self.tiles = tiles
         self.observation_types = env.observation_space.shape[0]
-        self.observation_space =tiles * env.observation_space.shape[0]
+        self.observation_space =gym.spaces.MultiBinary(tiles * env.observation_space.shape[0])
         self.base_meshes = [np.linspace(env.observation_space.low[i], env.observation_space.high[i], tiles) for i in range(self.observation_types)] 
         
     def step(self, action):
@@ -25,4 +25,4 @@ class DiscreteEnv(gym.Wrapper):
         for i in range(self.observation_types):
             id = np.argmin(np.abs(self.base_meshes[i] - state_raw[i]))
             state[i,id] = 1
-        return state.reshape(1,-1)
+        return state,{}

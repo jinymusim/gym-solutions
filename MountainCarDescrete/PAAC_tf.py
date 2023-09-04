@@ -1,12 +1,10 @@
 
-import random
 import tensorflow as tf
-import tensorflow_probability as tfp
 import argparse
 import gymnasium as gym
 import numpy as np
-import collections
-from discretise import DiscreteEnv, DiscreteVenv
+from functools import partial
+from discrete_env_wrapper import DiscreteEnv
 
 parser = argparse.ArgumentParser()
 
@@ -26,7 +24,7 @@ class PAAC:
     
     class Actor(tf.keras.Model):
         
-        def __init__(self, args: argparse.Namespace, env: DiscreteEnv,*kwargs):
+        def __init__(self, args: argparse.Namespace, env: gym.Env,*kwargs):
             super().__init__(*kwargs)
             self.hidden = tf.keras.layers.Dense(args.hidden_size, activation="relu")
             self.actions  = tf.keras.layers.Dense(env.action_space.n, activation=tf.nn.softmax)
@@ -39,7 +37,7 @@ class PAAC:
         
     class Critic(tf.keras.Model):
         
-        def __init__(self, args: argparse.Namespace, env: DiscreteEnv,*kwargs):
+        def __init__(self, args: argparse.Namespace, env: gym.Env,*kwargs):
             super().__init__(*kwargs)
             self.hidden = tf.keras.layers.Dense(args.hidden_size, activation="relu")
             self.output_val = tf.keras.layers.Dense(1, activation=None)
@@ -49,7 +47,7 @@ class PAAC:
             outputs = self.output_val(hidden)
             return outputs
         
-    def __init__(self, args: argparse.Namespace, env: DiscreteEnv) -> None:
+    def __init__(self, args: argparse.Namespace, env: gym.Env) -> None:
         self.actor = PAAC.Actor(args, env)
         self.actor.compile(
             optimizer= "adam",
@@ -120,8 +118,9 @@ class Trainer:
     def train(self):
         j = 0
         
-        venv = gym.vector.make(self.args.env, self.args.num_envs, asynchronous=True)
-        venv = DiscreteVenv(venv, self.args.tiles)
+        
+        wrapper = partial(DiscreteEnv, tiles=self.args.tiles)
+        venv = gym.vector.make(self.args.env, self.args.num_envs, asynchronous=True, wrappers=[wrapper])
         states = venv.reset()[0]
         
         while True:
