@@ -25,4 +25,4 @@ class DiscreteEnv(gym.Wrapper):
         for i in range(self.observation_types):
             id = np.argmin(np.abs(self.base_meshes[i] - state_raw[i]))
             state[i,id] = 1
-        return state,{}
+        return state.reshape(-1),{}
