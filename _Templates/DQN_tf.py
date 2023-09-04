@@ -4,25 +4,9 @@ import tensorflow as tf
 import gymnasium as gym
 import collections
 import random
-from discrete_env_wrapper import DiscreteEnv
-
 import argparse
 
-parser = argparse.ArgumentParser()
-parser.add_argument("--env", default="MountainCar-v0", type=str, help="Environment.")
-parser.add_argument("--hidden_layer", default=32, type=int, help="Hidden layers sizes")
-parser.add_argument("--epochs", default=5000, type=int, help="Number of epochs to train for")
-parser.add_argument("--batch_size", default=8, type=int, help="Batch size")
-parser.add_argument("--lr", default=1e-3, type=float, help="Learning Rate")
-parser.add_argument("--evaluate_each", default=50, type=int, help="After how many epochs to evaluate")
-parser.add_argument("--evaluate_for", default=10, type=int, help="For How many Epochs to evaluate")
-parser.add_argument("--epsilon", default=0.9, type=float, help="Exploration factor")
-parser.add_argument("--epsilon_final", default=0.1, type=float, help="Final exploration factor")
-parser.add_argument("--epsilon_final_at", default=1000, type=int, help="Training episodes")
-parser.add_argument("--target_update_freq", default=10, type=int, help="Target update frequency")
-parser.add_argument("--gamma", default=0.99, type=float, help="Discounting factor.")
-parser.add_argument("--min_buffer", default=100, type=int, help="Training episodes")
-parser.add_argument("--tiles", default=8, type=int, help="Number of tiling per dimension")
+
 
 class Agent:
     
@@ -140,10 +124,4 @@ def main(env, args):
     trainer = Trainer(model, target, env, args)
     trainer.train()
     
-if __name__ == "__main__": 
-    args = parser.parse_args([] if "__file__" not in globals() else None)
-    env = gym.make(args.env)
-    env = DiscreteEnv(env, args.tiles)
-    
-    main(env, args)
         
