@@ -95,9 +95,9 @@ class Trainer:
                 for i in reversed(range(len(rewards) - 1)):
                     rewards[i] +=  rewards[i + 1]
                     
-            batch_states += states
-            batch_actions += actions
-            batch_returns += rewards
+                batch_states += states
+                batch_actions += actions
+                batch_returns += rewards
             
             returns = self.model.forward_loss(torch.tensor(batch_states), torch.tensor(batch_actions).type(torch.LongTensor), torch.tensor(batch_returns))
             returns["loss"].backward()

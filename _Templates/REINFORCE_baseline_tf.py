@@ -111,9 +111,9 @@ class Trainer:
                 for i in reversed(range(len(rewards) - 1)):
                     rewards[i] +=  rewards[i + 1]
                     
-            batch_states += states
-            batch_actions += actions
-            batch_returns += rewards
+                batch_states += states
+                batch_actions += actions
+                batch_returns += rewards
             
             self.agent.train(np.asarray(batch_states, dtype=np.float32).reshape(-1, self.env.observation_space.n), 
                              np.asarray(batch_actions, dtype=np.int32),
