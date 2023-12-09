@@ -30,7 +30,7 @@ class Agent:
         
         inputs = tf.keras.layers.Input(self.observation_space)
         hidden = tf.keras.layers.Dense(args.hidden_layer, activation="relu")(inputs)
-        outputs = tf.keras.layers.Dense(self.action_space, activation="softmax")(hidden)
+        outputs = tf.keras.layers.Dense(self.action_space, activation=None)(hidden)
         
         self.model = tf.keras.Model(inputs=inputs, outputs=outputs)
         self.model.compile(
@@ -73,8 +73,8 @@ class Trainer:
             state, done = self.env.reset()[0], False
             total_reward = 0
             while not done:
-                agent_prob = self.agent.forward(np.asarray(state).reshape(1, -1))
-                action = np.argmax(agent_prob.numpy()[0])
+                action_value = self.agent.forward(np.asarray(state).reshape(1, -1))
+                action = np.argmax(action_value.numpy()[0])
                     
                 next_state, reward, terminated, truncated, _ = self.env.step(action)
                 done = terminated or truncated

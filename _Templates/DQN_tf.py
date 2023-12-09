@@ -17,7 +17,7 @@ class Agent:
         
         inputs = tf.keras.layers.Input(self.observation_space)
         hidden = tf.keras.layers.Dense(args.hidden_layer, activation="relu")(inputs)
-        outputs = tf.keras.layers.Dense(self.action_space, activation="softmax")(hidden)
+        outputs = tf.keras.layers.Dense(self.action_space, activation=None)(hidden)
         
         self.model = tf.keras.Model(inputs=inputs, outputs=outputs)
         self.model.compile(
@@ -96,15 +96,15 @@ class Trainer:
                         self.target_agent.copy_weights_from(self.agent)
 
                     episode = random.choices(replay_buffer, k=self.args.batch_size)
-                    returns = [reward + self.args.gamma*np.max(
-                        self.target_agent.forward(np.asarray(next_state, dtype=np.float32).reshape(1, -1)).numpy()[0]
-                    )*(1-done) for _, _, reward, done, next_state in episode]
+                    returns = [in_reward + self.args.gamma*np.max(
+                        self.target_agent.forward(np.asarray(in_next_state, dtype=np.float32).reshape(1, -1)).numpy()[0]
+                    )*(1-in_done) for _, _, in_reward, in_done, in_next_state in episode]
                     returns = np.asarray(returns, dtype=np.float32)
                     mask = np.zeros(shape=(len(returns), self.env.action_space.n), dtype=np.float32)
                     for i in range(len(returns)):
                         mask[i,episode[i][1]] = 1
                         
-                    self.agent.train(np.asarray([state for state,_,_,_,_ in episode], dtype=np.float32).reshape(self.args.batch_size, -1), returns[:, np.newaxis] * mask, mask)
+                    self.agent.train(np.asarray([in_state for in_state,_,_,_,_ in episode], dtype=np.float32).reshape(self.args.batch_size, -1), returns[:, np.newaxis] * mask, mask)
 
                 state = next_state
                 
